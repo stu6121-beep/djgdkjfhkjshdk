@@ -15,7 +15,7 @@
 'use strict';
 const $=id=>document.getElementById(id);
 let mode='api',videoId='',player=null,token=0,seekDragging=false,base=0,clockRunning=false,clockStartedAt=0,clockInterval=null;
-function parseId(raw){const s=String(raw||'').trim();if(/^[A-Za-z0-9_-]{11}$/.test(s))return s;try{const u=new URL(s.includes('://')?s:'https://'+s),h=u.hostname.toLowerCase().replace(/^www\\./,'');if(h==='youtu.be')return(u.pathname.split('/').filter(Boolean)[0]||'').slice(0,11);if(h==='youtube.com'||h.endsWith('.youtube.com')){if(u.searchParams.get('v'))return u.searchParams.get('v');const p=u.pathname.split('/').filter(Boolean);if(['embed','shorts','live'].includes(p[0]))return p[1]||''}}catch{}return''}
+function parseId(raw){const s=String(raw||'').trim();if(/^[A-Za-z0-9_-]{11}$/.test(s))return s;try{const u=new URL(s.includes('://')?s:'https://'+s),h=u.hostname.toLowerCase().replace(/^www\./,'');if(h==='youtu.be')return(u.pathname.split('/').filter(Boolean)[0]||'').slice(0,11);if(h==='youtube.com'||h.endsWith('.youtube.com')){if(u.searchParams.get('v'))return u.searchParams.get('v');const p=u.pathname.split('/').filter(Boolean);if(['embed','shorts','live'].includes(p[0]))return p[1]||''}}catch{}return''}
 function fmt(v){v=Math.max(0,Math.floor(Number(v)||0));return String(Math.floor(v/60)).padStart(2,'0')+':'+String(v%60).padStart(2,'0')}
 function now(){return clockRunning?base+(Date.now()-clockStartedAt)/1000:base}
 function readout(cur,dur){cur=Math.max(0,Number(cur)||0);dur=Math.max(0,Number(dur)||0);$('timeReadout').innerHTML=fmt(cur)+' <span class="muted">/ '+(dur?fmt(dur):'--:--')+'</span>';$('seekRange').max=String(dur||Math.max(100,cur+60));if(!seekDragging)$('seekRange').value=String(Math.min(cur,Number($('seekRange').max)||cur))}

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>YouTube iframe 방식 비교 실험</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1117;--panel:#161b22;--line:#30363d;--text:#e6edf3;--muted:#9da7b3;--blue:#58a6ff;--green:#3fb950;--orange:#d29922}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:28px 18px 56px}h1{font-size:clamp(24px,4vw,34px);line-height:1.2;margin:0 0 8px}h2{font-size:20px;margin:0 0 12px}.muted{color:var(--muted)}.intro{margin:0 0 24px;color:var(--muted)}
+.panel{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:18px;margin:16px 0}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.field{display:flex;gap:8px;flex:1;min-width:230px}input[type=text]{min-width:0;flex:1;background:#0d1117;border:1px solid var(--line);border-radius:8px;color:var(--text);padding:11px 12px;font:inherit}button{border:1px solid var(--line);background:#21262d;color:var(--text);border-radius:8px;padding:10px 13px;font:inherit;cursor:pointer}button:hover{border-color:var(--blue)}button.primary{background:#1f6feb;border-color:#1f6feb;color:white}button.active{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}button:disabled{opacity:.45;cursor:not-allowed}
+.mode-row{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.player-wrap{width:100%;max-width:640px;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;border:1px solid var(--line)}.player-wrap iframe{display:block;width:100%;height:100%;border:0}.player-placeholder{height:100%;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted)}.player-grid{display:grid;grid-template-columns:minmax(0,640px) minmax(200px,1fr);gap:20px;align-items:start}.status{color:var(--muted);font-size:14px;min-height:24px;margin:10px 0}.time{font-variant-numeric:tabular-nums;font-weight:650;font-size:20px}.progress{width:100%;accent-color:var(--blue)}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.note{font-size:13px;color:var(--muted);border-left:3px solid var(--orange);padding:9px 12px;background:#1b1a14;border-radius:0 8px 8px 0;margin-top:12px}.good{color:var(--green)}.bad{color:#ff7b72}code{color:#d2a8ff;background:#0d1117;border-radius:4px;padding:2px 4px}.checklist{padding-left:20px;color:var(--muted)}.checklist li{margin:5px 0}footer{margin-top:26px;color:var(--muted);font-size:13px}
+@media(max-width:760px){main{padding:20px 12px 40px}.player-grid{grid-template-columns:1fr}.panel{padding:14px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>YouTube iframe 방식 비교 실험</h1>
+  <p class="intro">API 플레이어와 일반 iframe 방식을 비교하는 실험 페이지야. 두 방식 모두 플레이어를 화면에 보이게 표시해. 이 페이지는 광고를 숨기거나 차단하지 않아.</p>
+
+  <section class="panel">
+    <h2>1. 테스트할 영상 선택</h2>
+    <div class="row">
+      <label class="field"><input id="videoInput" type="text" placeholder="YouTube URL 또는 영상 ID를 붙여넣기" autocomplete="off" aria-label="YouTube URL 또는 영상 ID"></label>
+      <button id="loadBtn" class="primary" type="button">영상 불러오기</button>
+    </div>
+    <p id="inputStatus" class="status" role="status">검색 결과에서 영상 주소를 복사해 붙여넣어 줘.</p>
+  </section>
+
+  <section class="panel">
+    <h2>2. 재생 방식</h2>
+    <div class="mode-row">
+      <button id="apiModeBtn" class="active" type="button">A · IFrame Player API</button>
+      <button id="directModeBtn" type="button">B · 일반 iframe + 수동 타이머</button>
+    </div>
+    <div class="player-grid">
+      <div>
+        <div id="playerWrap" class="player-wrap"><div class="player-placeholder">영상을 불러오면 이곳에 640×360 플레이어가 표시돼.</div></div>
+        <p id="playerStatus" class="status" role="status">아직 영상을 불러오지 않았어.</p>
+      </div>
+      <div>
+        <div class="time" id="timeReadout">00:00 <span class="muted">/ --:--</span></div>
+        <input id="seekRange" class="progress" type="range" min="0" max="100" value="0" disabled aria-label="재생 위치">
+        <div class="controls">
+          <button id="backBtn" type="button" disabled>−10초</button>
+          <button id="forwardBtn" type="button" disabled>+10초</button>
+        </div>
+        <div id="directControls" hidden>
+          <div class="controls">
+            <button id="clockStartBtn" type="button" disabled>수동 타이머 시작</button>
+            <button id="clockPauseBtn" type="button" disabled>타이머 멈춤</button>
+            <button id="reloadAtTimeBtn" type="button" disabled>현재 위치에서 다시 불러오기</button>
+          </div>
+          <p class="muted" style="font-size:13px">일반 iframe은 실제 재생 시간이나 일시정지 상태를 페이지에 알려주지 않아. 영상의 재생/일시정지는 플레이어 안에서 직접 조작하고, 타이머는 재생을 시작한 뒤 별도로 눌러 맞춰 줘.</p>
+        </div>
+        <div class="note">일반 iframe에서 앞뒤 이동은 <code>start=초</code>를 붙여 플레이어를 다시 불러오는 방식이야. 이때 버퍼링이 생길 수 있고, 광고가 다시 나올 수도 있어. 광고가 없어지는 방식은 아니야.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>3. 테스트할 항목</h2>
+    <ol class="checklist">
+      <li>같은 영상에서 두 방식을 각각 불러와 광고가 표시되는지 관찰.</li>
+      <li>API 방식은 재생 위치 표시와 ±10초 이동이 실제 영상과 맞는지 확인.</li>
+      <li>일반 iframe 방식은 영상을 재생한 뒤 수동 타이머를 시작하고, ±10초 이동 후 위치가 얼마나 맞는지 확인.</li>
+      <li>일반 iframe 방식에서 탐색할 때 버퍼링·광고 재표시·타이머 오차가 발생하는지 기록.</li>
+    </ol>
+    <p class="note">YouTube 임베드 플레이어는 최소 200×200픽셀이어야 해. 숨김 1px 플레이어는 이 조건을 충족하지 않으므로 이 비교에는 넣지 않았어.</p>
+  </section>
+  <footer>이 페이지는 실험용 프로토타입이야. 실제 광고 표시, 자동재생 허용 여부, 임베드 가능 여부는 영상·브라우저·YouTube 측 동작에 따라 달라질 수 있어.</footer>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+let mode = 'api';
+let videoId = '';
+let apiPlayer = null;
+let isSeeking = false;
+let apiLoadToken = 0;
+let directBaseSeconds = 0;
+let directClockRunning = false;
+let directClockStartMs = 0;
+let directClockInterval = null;
+let cachedDuration = 0;
+function normalizeVideoId(raw){
+  const s = String(raw || '').trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  try {
+    const u = new URL(s.includes('://') ? s : 'https://' + s);
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'youtu.be') return (u.pathname.split('/').filter(Boolean)[0] || '').slice(0, 11);
+    if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+      if (u.searchParams.get('v')) return u.searchParams.get('v');
+      const parts = u.pathname.split('/').filter(Boolean);
+      if (['embed', 'shorts', 'live'].includes(parts[0])) return parts[1] || '';
+    }
+  } catch {}
+  return '';
+}
+function fmt(seconds){
+  const n = Math.max(0, Math.floor(Number(seconds) || 0));
+  return String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
+}
+function getDirectTime(){
+  return directClockRunning ? directBaseSeconds + (Date.now() - directClockStartMs) / 1000 : directBaseSeconds;
+}
+function setReadout(current, duration){
+  const currentSafe = Math.max(0, Number(current) || 0);
+  const durationSafe = Math.max(0, Number(duration) || 0);
+  $('timeReadout').innerHTML = `${fmt(currentSafe)} <span class="muted">/ ${durationSafe ? fmt(durationSafe) : '--:--'}</span>`;
+  $('seekRange').max = String(durationSafe || Math.max(100, currentSafe + 60));
+  if (!isSeeking) $('seekRange').value = String(Math.min(currentSafe, Number($('seekRange').max) || currentSafe));
+}
+function updateControls(){
+  const loaded = Boolean(videoId);
+  $('backBtn').disabled = !loaded;
+  $('forwardBtn').disabled = !loaded;
+  $('seekRange').disabled = !loaded;
+  $('clockStartBtn').disabled = !loaded || directClockRunning;
+  $('clockPauseBtn').disabled = !loaded || !directClockRunning;
+  $('reloadAtTimeBtn').disabled = !loaded;
+}
+function clearDirectClock(){
+  directClockRunning = false;
+  directBaseSeconds = 0;
+  directClockStartMs = 0;
+  if (directClockInterval) clearInterval(directClockInterval);
+  directClockInterval = null;
+}
+function showMode(){
+  $('apiModeBtn').classList.toggle('active', mode === 'api');
+  $('directModeBtn').classList.toggle('active', mode === 'direct');
+  $('directControls').hidden = mode !== 'direct';
+  $('playerStatus').textContent = mode === 'api'
+    ? 'API 방식: 플레이어 시간을 읽어 위치 표시와 탐색을 제어해.'
+    : '일반 iframe 방식: API 없이 영상 주소만 사용해. 페이지 타이머는 직접 시작·정지해야 해.';
+}
+function ensureApi(){
+  if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+  if (window.__youtubeApiPromise) return window.__youtubeApiPromise;
+  window.__youtubeApiPromise = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('YouTube IFrame API loading timed out')), 15000);
+    window.onYouTubeIframeAPIReady = () => { clearTimeout(timeout); resolve(window.YT); };
+    const script = document.createElement('script');
+    script.src = 'https://www.youtube.com/iframe_api';
+    script.onerror = () => { clearTimeout(timeout); reject(new Error('Could not load YouTube IFrame API')); };
+    document.head.appendChild(script);
+  });
+  return window.__youtubeApiPromise;
+}
+function loadCurrent(){
+  if (!videoId) return;
+  const currentToken = ++apiLoadToken;
+  clearDirectClock();
+  directBaseSeconds = 0;
+  cachedDuration = 0;
+  if (apiPlayer && typeof apiPlayer.destroy === 'function') { try { apiPlayer.destroy(); } catch {} }
+  apiPlayer = null;
+  $('playerWrap').innerHTML = '';
+  $('timeReadout').innerHTML = '00:00 <span class="muted">/ --:--</span>';
+  $('seekRange').value = '0';
+  $('inputStatus').textContent = '영상 ID: ' + videoId;
+  showMode();
+  updateControls();
+  if (mode === 'direct') {
+    makeDirectFrame(0, false);
+    $('playerStatus').textContent = '일반 iframe을 불러왔어. 영상 안의 재생 버튼을 누르고, 실제 재생이 시작되면 “수동 타이머 시작”을 눌러 줘.';
+    setReadout(0, 0);
+    updateControls();
+    return;
+  }
+  $('playerWrap').innerHTML = `<div id="apiPlayerTarget" style="width:100%;height:100%"></div>`;
+  $('playerStatus').textContent = 'API 플레이어 로딩 중…';
+  ensureApi().then(YT => {
+    if (currentToken !== apiLoadToken) return;
+    apiPlayer = new YT.Player('apiPlayerTarget', {
+      width: '640', height: '360', videoId,
+      playerVars: { controls: 1, playsinline: 1, rel: 0, enablejsapi: 1, origin: location.origin },
+      events: {
+        onReady: event => {
+          if (currentToken !== apiLoadToken) return;
+          const frame = event.target.getIframe();
+          frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+          frame.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share');
+          frame.setAttribute('allowfullscreen', '');
+          cachedDuration = Number(event.target.getDuration()) || 0;
+          $('playerStatus').textContent = 'API 플레이어 준비 완료. 영상 안에서 재생 버튼을 눌러 줘.';
+          updateControls();
+        },
+        onError: event => {
+          if (currentToken === apiLoadToken) $('playerStatus').textContent = '플레이어 오류: ' + event.data + ' (이 영상은 임베드가 제한될 수 있어.)';
+        }
+      }
+    });
+  }).catch(error => { if (currentToken === apiLoadToken) $('playerStatus').textContent = 'API 로딩 실패: ' + error.message; });
+}
+function makeDirectFrame(startSeconds, autoplay){
+  const id = videoId;
+  const start = Math.max(0, Math.floor(Number(startSeconds) || 0));
+  const params = new URLSearchParams({ start: String(start), autoplay: autoplay ? '1' : '0', controls: '1', playsinline: '1', rel: '0' });
+  const frame = document.createElement('iframe');
+  frame.title = 'YouTube video player — direct iframe test';
+  frame.width = '640'; frame.height = '360';
+  frame.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?' + params.toString();
+  frame.referrerPolicy = 'strict-origin-when-cross-origin';
+  frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+  frame.allowFullscreen = true;
+  $('playerWrap').replaceChildren(frame);
+}
+function directSeek(seconds){
+  const next = Math.max(0, Math.floor((mode === 'direct' ? getDirectTime() : 0) + seconds));
+  directBaseSeconds = next;
+  directClockRunning = false;
+  if (directClockInterval) clearInterval(directClockInterval);
+  directClockInterval = null;
+  directClockStartMs = 0;
+  makeDirectFrame(next, true);
+  $('playerStatus').textContent = `start=${next}초로 iframe을 다시 불러왔어. 영상 재생 상태를 보고 타이머를 다시 시작해 줘. 위치는 키프레임 때문에 조금 다를 수 있어.`;
+  setReadout(next, 0);
+  updateControls();
+}
+function seekBy(seconds){
+  if (!videoId) return;
+  if (mode === 'api' && apiPlayer && typeof apiPlayer.seekTo === 'function') {
+    const current = Number(apiPlayer.getCurrentTime()) || 0;
+    apiPlayer.seekTo(Math.max(0, current + seconds), true);
+  } else if (mode === 'direct') directSeek(seconds);
+}
+$('loadBtn').addEventListener('click', () => {
+  const id = normalizeVideoId($('videoInput').value);
+  if (!id) { $('inputStatus').textContent = '올바른 YouTube URL 또는 11자리 영상 ID를 입력해 줘.'; return; }
+  videoId = id;
+  loadCurrent();
+});
+$('videoInput').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); $('loadBtn').click(); } });
+$('apiModeBtn').addEventListener('click', () => { mode = 'api'; showMode(); if (videoId) loadCurrent(); });
+$('directModeBtn').addEventListener('click', () => { mode = 'direct'; showMode(); if (videoId) loadCurrent(); });
+$('backBtn').addEventListener('click', () => seekBy(-10));
+$('forwardBtn').addEventListener('click', () => seekBy(10));
+$('seekRange').addEventListener('pointerdown', () => { isSeeking = true; });
+$('seekRange').addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight','Home','End','PageUp','PageDown'].includes(event.key)) isSeeking = true; });
+$('seekRange').addEventListener('change', () => {
+  isSeeking = false;
+  const target = Number($('seekRange').value) || 0;
+  if (mode === 'api' && apiPlayer && typeof apiPlayer.seekTo === 'function') apiPlayer.seekTo(target, true);
+  else if (mode === 'direct') directSeek(target - getDirectTime());
+});
+$('clockStartBtn').addEventListener('click', () => {
+  if (mode !== 'direct' || !videoId || directClockRunning) return;
+  directClockRunning = true;
+  directClockStartMs = Date.now();
+  directClockInterval = setInterval(() => { const t = getDirectTime(); setReadout(t, 0); }, 250);
+  $('playerStatus').textContent = '수동 타이머 실행 중. 영상이 실제로 재생 중인지 페이지는 감지할 수 없으니 영상 안의 상태와 비교해 줘.';
+  updateControls();
+});
+$('clockPauseBtn').addEventListener('click', () => {
+  directBaseSeconds = getDirectTime();
+  directClockRunning = false;
+  if (directClockInterval) clearInterval(directClockInterval);
+  directClockInterval = null;
+  setReadout(directBaseSeconds, 0);
+  $('playerStatus').textContent = '수동 타이머만 멈췄어. 영상 자체는 YouTube 플레이어 안에서 따로 일시정지해야 해.';
+  updateControls();
+});
+$('reloadAtTimeBtn').addEventListener('click', () => directSeek(0));
+setInterval(() => {
+  if (mode !== 'api' || !apiPlayer || typeof apiPlayer.getCurrentTime !== 'function') return;
+  try {
+    const current = Number(apiPlayer.getCurrentTime()) || 0;
+    const duration = Number(apiPlayer.getDuration()) || cachedDuration;
+    setReadout(current, duration);
+    const state = Number(apiPlayer.getPlayerState());
+    if (state === 1) $('playerStatus').textContent = 'API player: playing';
+    else if (state === 2) $('playerStatus').textContent = 'API player: paused';
+    else if (state === 3) $('playerStatus').textContent = 'API player: buffering';
+  } catch {}
+}, 500);
+showMode();
+updateControls();
+</script>
+</body>
+</html>
